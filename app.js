@@ -8,10 +8,28 @@ const { StudLeavesModel } = require("./models/StudLeave")
 const { FacultyLeavesModel } = require("./models/FacultyLeave")
 const jwt = require("jsonwebtoken")
 const bcrypt = require("bcryptjs")
+const multer = require('multer');
+
 
 const app = express()
 app.use(cors())
 app.use(express.json())
+
+
+// Setup multer for file upload
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, 'uploads/'); // Set the folder to store uploaded files
+    },
+    filename: (req, file, cb) => {
+        // Generate unique filename without using 'path'
+        const uniqueName = Date.now() + '-' + file.originalname;
+        cb(null, uniqueName); // Use Date.now() and original file name
+    }
+});
+
+const upload = multer({ storage: storage });
+
 
 const generateHashPassword = async (password) => {
     const salt = await bcrypt.genSalt(10)
@@ -19,7 +37,7 @@ const generateHashPassword = async (password) => {
 }
 
 
-mongoose.connect("mongodb+srv://edisongeorge:edisonmg@cluster0.7y1x5l7.mongodb.net/studentdb?retryWrites=true&w=majority&appName=Cluster0")
+mongoose.connect("mongodb+srv://rizwan2001:rizwan2001@cluster0.6ucejfl.mongodb.net/edison?retryWrites=true&w=majority&appName=Cluster0")
 
 
 app.post("/studsignup", async (req, res) => {
@@ -165,32 +183,49 @@ app.post("/facultylogin", (req, res) => {
 
 
 
-app.post("/studaddleave", (req, res) => {
-    let input = req.body
-    let Stud = new StudLeavesModel(input)
-    Stud.save()
-    res.json({ "status": "success" })
-})
+app.post("/studaddleave", upload.single('file'), (req, res) => {
+    const input = req.body;
+    input.filepath = req.file ? req.file.path : null; // Save the file path if file exists
+
+    const newLeave = new StudLeavesModel(input);
+    newLeave.save()
+        .then(() => res.json({ status: "success" }))
+        .catch(err => res.json({ status: "error", error: err }));
+});
+app.use('/uploads', express.static('uploads'));
 
 
 
+app.post("/facultyaddleave", upload.single('file'), (req, res) => {
+    const input = req.body;
+    input.filepath = req.file ? req.file.path : null; // Save the file path if file exists
 
-app.post("/facultyaddleave", (req, res) => {
-    let input = req.body
-    let faculty = new FacultyLeavesModel(input)
-    faculty.save()
-    res.json({ "status": "success" })
-})
+    const newLeave = new FacultyLeavesModel(input);
+    newLeave.save()
+        .then(() => res.json({ status: "success" }))
+        .catch(err => res.json({ status: "error", error: err }));
+});
 
+// Serve uploaded files statically
+app.use('/uploads', express.static('uploads'));
 
 
 app.get("/viewStud", (req, res) => {
-    StudLeavesModel.find().then(
-        (data => {
-            res.json(data)
+    StudLeavesModel.find() // Fetch all student leave records
+        .then((data) => {
+            // Check if data is found
+            if (data.length === 0) {
+                return res.status(404).json({ message: "No student leave records found" });
+            }
+
+            console.log("Fetched student leaves data:", data); // Log fetched data for debugging
+            res.json(data); // Return the data, including the file path
         })
-    )
-})
+        .catch((error) => {
+            console.error("Error fetching student leaves:", error); // Log any error
+            res.status(500).json({ message: "Error fetching data" }); // Return error response
+        });
+});
 
 
 
